@@ -20,7 +20,7 @@ public class CardFrame implements ActionListener, WindowListener {
     private String howToPlay = "TODO";
 
     public CardFrame() {
-        frame = new JFrame("Tom");
+        frame = new JFrame("Kings And Aces");
         frame.setLayout(new BorderLayout());
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         frame.addWindowListener(this);
