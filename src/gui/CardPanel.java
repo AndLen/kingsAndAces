@@ -25,7 +25,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private static int NUMBER_CLICKS = 0;
     private static long LAST_PRESS = System.currentTimeMillis();
     private static double CARD_X_GAP;
-    private static double CARD_Y_NO_OVERLAP;
+    private static double CARD_Y_GAP;
     private static double Y_BOARD_OFFSET;
     private static double X_BOARD_OFFSET;
     private static double DECK_Y;
@@ -56,16 +56,42 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         g.setColor(BACKGROUND_GREEN);
         g.fillRect(0, 0, this.getWidth(), this.getHeight());
 
-        renderTopRow(g);
+        renderHandIfAny(g);
         final List<List<Card>> gameBoard = game.getBoard();
         renderBoard(g, gameBoard);
         //Lets render this in the dragged event instead to lower load
         //renderDragCards(g, gameBoard);
         renderDeck(g);
+        renderAcePile(g);
+        renderKingPile(g);
         renderError(g);
         successfulPaint = true;
         gOriginal.drawImage(lastImage, 0, 0, null);
         g.dispose();
+    }
+
+    private void renderKingPile(Graphics2D g) {
+        double x = X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP;
+        double y = Y_BOARD_OFFSET;
+        for (List<Card> kingPile : game.getKingPiles()) {
+            if (kingPile.size() > 0) {
+                renderCard(kingPile.get(kingPile.size() - 1), g, x, y);
+            }
+            y += CARD_HEIGHT + CARD_Y_GAP;
+        }
+    }
+
+    private void renderAcePile(Graphics2D g) {
+        double x = X_BOARD_OFFSET + CARD_WIDTH * 6 + CARD_X_GAP * 6;
+        double y = Y_BOARD_OFFSET;
+        for (List<Card> acePile : game.getAcePiles()) {
+            if (acePile.size() > 0) {
+                renderCard(acePile.get(acePile.size() - 1), g, x, y);
+            }
+            y += CARD_HEIGHT + CARD_Y_GAP;
+
+        }
+
     }
 
     private void renderError(Graphics2D g) {
@@ -96,7 +122,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
             topCard = null;
         }
         if (topCard == null) {
-            renderCard(topCard, g, x, y);
+            renderCard(null, g, x, y);
         } else {
             renderUpsideDownCard(g, x, y, topCard.isBlueBack());
         }
@@ -108,24 +134,24 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
                 renderCard(game.getDeck().peek(), g, activeX - (CARD_WIDTH / 2), activeY);
             } else if (activeMove.getMoveType() == CardMove.MOVE_TYPE.FROM_PILE) {
                 int index = activeMove.getBoardIndexFrom();
-                List<Card> pile = game.getTopRow().get(index);
+                List<Card> pile = game.getHand();
                 renderCard(pile.get(pile.size() - 1), g, activeX - (CARD_WIDTH / 2), activeY);
             } else {
                 List<Card> beingDragged = gameBoard.get(activeMove.getBoardIndexFrom());
                 double currY = activeY;
-                for (int i = activeMove.getToMoveTop(); i < beingDragged.size(); i++) {
+                for (int i = activeMove.getToMove(); i < beingDragged.size(); i++) {
 
                     //Render so the top of cards are centered on the mouse
                     renderCard(beingDragged.get(i), g, activeX - (CARD_WIDTH / 2), currY);
-                    currY += CARD_Y_NO_OVERLAP;
+                    currY += CARD_Y_GAP;
                 }
             }
         }
     }
 
     private void renderBoard(Graphics2D g, List<List<Card>> gameBoard) {
-        double x = X_BOARD_OFFSET;
-        double y = Y_BOARD_OFFSET;
+        double x = X_BOARD_OFFSET + CARD_WIDTH * 2 + CARD_X_GAP * 2;
+        double y = Y_BOARD_OFFSET + CARD_HEIGHT / 2;
 
         if (gameBoard.size() == 0) {
             //Game not inited yet
@@ -134,111 +160,80 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
 
         for (int i = 0; i < gameBoard.size(); i++) {
             List<Card> cards = gameBoard.get(i);
-            int firstRevealedCard = firstRevealed(cards);
-            int indexToRenderFrom = (i == 0) ? indexToStartFrom(cards, true, firstRevealedCard) : indexToStartFrom(cards, false, firstRevealedCard);
+            if (i != 0) {
+                if (i % 4 == 0) {
+                    x = X_BOARD_OFFSET + CARD_WIDTH * 2 + CARD_X_GAP * 2;
+                    y += CARD_Y_GAP + CARD_HEIGHT;
 
-            int hiddenCards = indexToRenderFrom - firstRevealedCard;
-            if (firstRevealedCard == -1 || (firstRevealedCard == lastRevealed(cards) && cards.get(firstRevealedCard).isHidden())) {
-                if (cards.size() > 0) {
-                    int lastUnRevealed = lastUnRevealed(cards);
-                    if(lastUnRevealed != -1){
-                    renderUpsideDownCard(g, x, y, cards.get(lastUnRevealed).isBlueBack());
-                    y += CARD_Y_NO_OVERLAP;}
-                }
-            } else {
-                for (int j = indexToRenderFrom; j < cards.size(); j++) {
-                    Card toRender = cards.get(j);
-                    if (!toRender.isHidden() && toRender.isRevealed()) {
-                        renderCard(cards.get(j), g, x, y);
-                        y += CARD_Y_NO_OVERLAP;
-                    }
+                } else {
+                    x += CARD_WIDTH + CARD_X_GAP;
                 }
             }
-            if (hiddenCards > 0) {
-                g.setColor(Color.white);
-                g.drawString(hiddenCards + (hiddenCards == 1 ? " card hidden" : " cards hidden"), (float) x, (float) Y_BOARD_OFFSET - 1);
+
+            if (cards.size() > 1) {
+                renderCard(cards.get(cards.size() - 1), g, x, y);
             }
-            if (firstRevealedCard > 0) {
-                g.setColor(Color.white);
-                g.drawString(firstRevealedCard + (firstRevealedCard == 1 ? " card face down" : " cards face down"), (float) x, (float) Y_BOARD_OFFSET - 15);
-            }
-            y = Y_BOARD_OFFSET;
-            x += CARD_WIDTH + CARD_X_GAP;
+
         }
     }
 
-    private int firstRevealed(List<Card> cards) {
-        int firstRevealed = -1;
-        for (int i = 0; i < cards.size(); i++) {
-            if (cards.get(i).isRevealed()) {
-                firstRevealed = i;
-                break;
-            }
+//    //Note that in the context of Tom, the unrevealed cards do not affect the sizing.
+//    private int indexToStartFrom(List<Card> cards, boolean dragonsTail, int firstRevealed) {
+//        double maxSize = dragonsTail ? DECK_Y : getHeight();
+//        //Required as when game is started, maxSize = 0..otherwise doesn't render..odd?
+//        maxSize = maxSize > 10 ? maxSize - 10 : 10;
+//        int numRevealed = Math.max(0, cards.size() - firstRevealed);
+//        double cardsYSize = Y_BOARD_OFFSET + (CARD_Y_GAP * numRevealed) + (CARD_HEIGHT - CARD_Y_GAP);
+//
+//        int indexToStartFrom = firstRevealed;
+//        while (cardsYSize > maxSize) {
+//            cardsYSize -= CARD_Y_GAP;
+//            indexToStartFrom++;
+//        }
+//        return indexToStartFrom;
+//    }
+
+    private void renderHandIfAny(Graphics2D g) {
+        //TODO
+        if (game.getBoard().size() == 0) {
+            return;
         }
-        return firstRevealed;
-    }
+        List<Card> hand = game.getBoard().get(0);
+        final double HAND_WIDTH = 3 * CARD_X_GAP + 4 * CARD_WIDTH;
+        final double wantedHandWidth = Math.max(HAND_WIDTH, hand.size() *CARD_WIDTH);
 
-    private int lastRevealed(List<Card> cards) {
-        int lastRevealed = -1;
-        for (int i = 0; i < cards.size(); i++) {
-            if (cards.get(i).isRevealed()) {
-                lastRevealed = i;
-            }
+        final double HAND_X_OVERLAP = (wantedHandWidth - HAND_WIDTH) / hand.size();
+        double x = X_BOARD_OFFSET + 2 * CARD_WIDTH + 2 * CARD_X_GAP;
+        double y = Y_BOARD_OFFSET + 3.5 * CARD_HEIGHT + 3 * CARD_Y_GAP;
+        for (Card card : hand) {
+            renderCard(card, g, x, y);
+            x += HAND_X_OVERLAP;
         }
-        return lastRevealed;
-    }
 
-    private int lastUnRevealed(List<Card> cards) {
-        int lastUnrevealed = -1;
-        for (int i = 0; i < cards.size(); i++) {
-            if (!cards.get(i).isRevealed()) {
-                lastUnrevealed = i;
-            }
-        }
-        return lastUnrevealed;
-    }
-
-    //Note that in the context of Tom, the unrevealed cards do not affect the sizing.
-    private int indexToStartFrom(List<Card> cards, boolean dragonsTail, int firstRevealed) {
-        double maxSize = dragonsTail ? DECK_Y : getHeight();
-        //Required as when game is started, maxSize = 0..otherwise doesn't render..odd?
-        maxSize = maxSize > 10 ? maxSize - 10 : 10;
-        int numRevealed = Math.max(0, cards.size() - firstRevealed);
-        double cardsYSize = Y_BOARD_OFFSET + (CARD_Y_NO_OVERLAP * numRevealed) + (CARD_HEIGHT - CARD_Y_NO_OVERLAP);
-
-        int indexToStartFrom = firstRevealed;
-        while (cardsYSize > maxSize) {
-            cardsYSize -= CARD_Y_NO_OVERLAP;
-            indexToStartFrom++;
-        }
-        return indexToStartFrom;
-    }
-
-    private void renderTopRow(Graphics2D g) {
-        List<List<Card>> topRow = game.getTopRow();
-        //We're one futher along as 8 in top row vs 10 in board
-        double x = X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP;
-        double y = CARD_Y_NO_OVERLAP;
-        for (List<Card> cards : topRow) {
-            if (cards.size() > 0) {
-                Card toRender = cards.get(cards.size() - 1);
-                //If top of pile isn't hidden, render that
-                if (!toRender.isHidden()) {
-                    renderCard(toRender, g, x, y);
-
-                }//Otherwise, render the 2nd highest if it exists
-                else if (cards.size() > 1) {
-                    renderCard(cards.get(cards.size() - 2), g, x, y);
-                }//Only one card in pile, so render empty.
-                else {
-                    renderCard(null, g, x, y);
-                }
-
-            } else {
-                renderCard(null, g, x, y);
-            }
-            x += CARD_WIDTH + CARD_X_GAP;
-        }
+//        List<List<Card>> topRow = game.getHand();
+//        //We're one futher along as 8 in top row vs 10 in board
+//        double x = X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP;
+//        double y = CARD_Y_GAP;
+//        for (List<Card> cards : topRow) {
+//            if (cards.size() > 0) {
+//                Card toRender = cards.get(cards.size() - 1);
+//                //If top of pile isn't hidden, render that
+//                if (!toRender.isHidden()) {
+//                    renderCard(toRender, g, x, y);
+//
+//                }//Otherwise, render the 2nd highest if it exists
+//                else if (cards.size() > 1) {
+//                    renderCard(cards.get(cards.size() - 2), g, x, y);
+//                }//Only one card in pile, so render empty.
+//                else {
+//                    renderCard(null, g, x, y);
+//                }
+//
+//            } else {
+//                renderCard(null, g, x, y);
+//            }
+//            x += CARD_WIDTH + CARD_X_GAP;
+        //}
 
     }
 
@@ -271,16 +266,16 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     @Override
     public void componentResized(ComponentEvent e) {
         double screenWidth = Toolkit.getDefaultToolkit().getScreenSize().getWidth();
-        CARD_X_GAP = getWidth() / 100;
-        CARD_WIDTH = (getWidth() - CARD_X_GAP) / 11;
+        CARD_X_GAP = getWidth() / 49;
+        CARD_WIDTH = (getWidth() - CARD_X_GAP) / 8;
         CARD_WIDTH = Math.min(CARD_WIDTH, screenWidth * 0.065);
 
-        X_BOARD_OFFSET = (getWidth() - (CARD_WIDTH * 10) - (CARD_X_GAP * 9)) / 2;
+        X_BOARD_OFFSET = (getWidth() - (CARD_WIDTH * 7) - (CARD_X_GAP * 6)) / 2;
 
         CARD_HEIGHT = CARD_WIDTH / (CARD_IMAGE_WIDTH / CARD_IMAGE_HEIGHT);
-        CARD_Y_NO_OVERLAP = CARD_HEIGHT / 4;
-        Y_BOARD_OFFSET = CARD_Y_NO_OVERLAP * 2 + CARD_HEIGHT;
-        DECK_Y = getHeight() - CARD_Y_NO_OVERLAP - CARD_HEIGHT;
+        CARD_Y_GAP = CARD_HEIGHT / 4;
+        Y_BOARD_OFFSET = CARD_Y_GAP;
+        DECK_Y = getHeight() - CARD_Y_GAP - CARD_HEIGHT;
     }
 
     @Override
@@ -369,7 +364,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
                 int elapsedTime = (int) (System.currentTimeMillis() - game.getStartTime());
                 StorageManager.win(elapsedTime, game.getNumMoves());
                 String[] options = new String[]{"Play Again", "Quit"};
-                int result = JOptionPane.showOptionDialog(CardFrame.showStats(), "Congratulations! You have won.\n Time: " + (elapsedTime/1000) + " s\nMoves: " + game.getNumMoves(), "Win!", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                int result = JOptionPane.showOptionDialog(CardFrame.showStats(), "Congratulations! You have won.\n Time: " + (elapsedTime / 1000) + " s\nMoves: " + game.getNumMoves(), "Win!", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
                 if (result == JOptionPane.YES_OPTION) {
                     game.restart();
 
@@ -386,11 +381,11 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         int index = findCardIndex(possibleCards, e.getY(), col == 0);
         if (index == -1) {
             if (e.getY() > Y_BOARD_OFFSET && e.getY() < Y_BOARD_OFFSET + CARD_HEIGHT) {
-                if (possibleCards.size() > 0) {
-                    CardMove unHide = new CardMove(col, possibleCards.size() - 1);
-                    processMoveResult(unHide.makeMove(game), unHide);
-                    //reveal it}
-                }
+//                if (possibleCards.size() > 0) {
+//                    CardMove unHide = new CardMove(col, possibleCards.size() - 1);
+//                    processMoveResult(unHide.makeMove(game), unHide);
+//                    //reveal it}
+//                }
                 //Indicates none found.
                 return;
             }
@@ -434,29 +429,9 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
 
 
     private int findCardIndex(List<Card> cards, int yPressed, boolean isDragonsTail) {
-        //y-coord of the end of the last card in the pile
-        // int numRevealed = Math.max(0, cards.size() - firstRevealed);
-        // double cardsYSize = Y_BOARD_OFFSET + (CARD_Y_NO_OVERLAP * numRevealed) + (CARD_HEIGHT - CARD_Y_NO_OVERLAP);
-        int firstRevealed = firstRevealed(cards);
-        int lastRevealed = lastRevealed(cards);
-        if (firstRevealed == -1) {
-            return -1;
-        }
-        int numRev = lastRevealed - firstRevealed + 1;
-        int endY = (int) (Y_BOARD_OFFSET + (CARD_HEIGHT - CARD_Y_NO_OVERLAP) + (numRev * CARD_Y_NO_OVERLAP));
-        if (yPressed > endY || yPressed < Y_BOARD_OFFSET) {
-            //i.e. not clicked on a card
-            return -1;
-        }
 
-        int index = (int) ((yPressed - Y_BOARD_OFFSET) / (CARD_Y_NO_OVERLAP));
+        int index = (int) ((yPressed - Y_BOARD_OFFSET) / (CARD_Y_GAP));
 
-        //Compensate for hidden cards
-        index += indexToStartFrom(cards, isDragonsTail, firstRevealed);
-
-        if (index >= cards.size()) {
-            index = lastRevealed;
-        }
 
         System.out.println("Index: " + index);
         return index;
@@ -477,7 +452,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         } else if (e.getY() > Y_BOARD_OFFSET) {
             int col = findCol(e.getX(), false);
             List<Card> cardList = game.getBoard().get(col);
-            Card toSendUp = cardList.get(lastRevealed(cardList));
+            Card toSendUp = cardList.get(cardList.size() - 1);
             int pileIndex = pileIndexToSendTo(toSendUp);
             System.out.println("sending to pile " + pileIndex);
             if (pileIndex != -1) {
@@ -492,21 +467,21 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     }
 
     private int pileIndexToSendTo(Card toSendUp) {
-        List<List<Card>> topRow = game.getTopRow();
-        for (int i = 0; i < topRow.size(); i++) {
-            List<Card> pile = topRow.get(i);
-            if (toSendUp.getRank() == Card.Rank.ACE) {
-                //find empty
-                if (pile.isEmpty()) {
-                    return i;
-                }
-            } else if (!pile.isEmpty()) {
-                Card topOfPile = pile.get(pile.size() - 1);
-                if (toSendUp.matchesAndOneAbove(topOfPile)) {
-                    return i;
-                }
-            }
-        }
+//        List<List<Card>> topRow = game.getHand();
+//        for (int i = 0; i < topRow.size(); i++) {
+//            List<Card> pile = topRow.get(i);
+//            if (toSendUp.getRank() == Card.Rank.ACE) {
+//                //find empty
+//                if (pile.isEmpty()) {
+//                    return i;
+//                }
+//            } else if (!pile.isEmpty()) {
+//                Card topOfPile = pile.get(pile.size() - 1);
+//                if (toSendUp.matchesAndOneAbove(topOfPile)) {
+//                    return i;
+//                }
+//            }
+//        }
         return -1;
     }
 

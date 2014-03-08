@@ -9,14 +9,12 @@ public class Card {
     //e.g. hiding while being dragged
     private boolean isHidden = false;
     //i.e. below other cards on the board.
-    private boolean isRevealed;
     private final boolean blueBack;
 
-    public Card(Suit suit, Rank rank, boolean isRevealed,boolean blueBack) {
+    public Card(Suit suit, Rank rank, boolean blueBack) {
 
         this.suit = suit;
         this.rank = rank;
-        this.isRevealed = isRevealed;
         this.blueBack = blueBack;
     }
 
@@ -48,13 +46,6 @@ public class Card {
         this.isHidden = isHidden;
     }
 
-    public boolean isRevealed() {
-        return isRevealed;
-    }
-
-    public void setRevealed(boolean isRevealed) {
-        this.isRevealed = isRevealed;
-    }
 
     public boolean isBlueBack() {
         return blueBack;

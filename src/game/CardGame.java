@@ -13,8 +13,10 @@ public class CardGame {
     //Actually uses copy on write arraylists to prevent concurrent modification from threading
     //(swing vs logic)
     private final List<List<Card>> board;
+    private final List<List<Card>> kingPiles;
+    private final List<List<Card>> acePiles;
     private final Queue<Card> deck;
-    private final List<List<Card>> topRow;
+    private final List<Card> hand;
     private final CardFrame cardFrame;
     private final Stack<CardMove> history;
     private long startTime;
@@ -23,8 +25,10 @@ public class CardGame {
         this.cardFrame = cardFrame;
         board = new CopyOnWriteArrayList<List<Card>>();
         deck = new LinkedList<Card>();
-        topRow = new CopyOnWriteArrayList<List<Card>>();
+        hand = new CopyOnWriteArrayList<Card>();
         history = new Stack<CardMove>();
+        kingPiles = new CopyOnWriteArrayList<List<Card>>();
+        acePiles = new CopyOnWriteArrayList<List<Card>>();
     }
 
     public void dealGame(CardPanel panel) {
@@ -43,49 +47,52 @@ public class CardGame {
             e.printStackTrace();
         }
         startTime = System.currentTimeMillis();
-        for (int i = 0; i < 8; i++) {
-            topRow.add(new CopyOnWriteArrayList<Card>());
-
+        for (int i = 0; i < 4; i++) {
+            kingPiles.add(new CopyOnWriteArrayList<Card>());
         }
+        kingPiles.get(0).add(new Card(Card.Suit.HEARTS, Card.Rank.KING, true));
+        repaintWhileDealing(panel);
+        kingPiles.get(1).add(new Card(Card.Suit.DIAMONDS, Card.Rank.KING, true));
+        repaintWhileDealing(panel);
+        kingPiles.get(2).add(new Card(Card.Suit.CLUBS, Card.Rank.KING, true));
+        repaintWhileDealing(panel);
+        kingPiles.get(3).add(new Card(Card.Suit.SPADES, Card.Rank.KING, true));
+        repaintWhileDealing(panel);
 
-        List<Card> firstPack = new ArrayList<Card>();
-        makePack(firstPack, false,false);
-        Collections.shuffle(firstPack);
+        for (int i = 0; i < 4; i++) {
+            acePiles.add(new CopyOnWriteArrayList<Card>());
+        }
+        acePiles.get(0).add(new Card(Card.Suit.HEARTS, Card.Rank.ACE, true));
+        repaintWhileDealing(panel);
+        acePiles.get(1).add(new Card(Card.Suit.DIAMONDS, Card.Rank.ACE, true));
+        repaintWhileDealing(panel);
+        acePiles.get(2).add(new Card(Card.Suit.CLUBS, Card.Rank.ACE, true));
+        repaintWhileDealing(panel);
+        acePiles.get(3).add(new Card(Card.Suit.SPADES, Card.Rank.ACE, true));
+        repaintWhileDealing(panel);
 
-        //Make 10 piles
-        for (int i = 0; i < 10; i++) {
+        List<Card> pack = new ArrayList<Card>();
+        makePacks(pack);
+        Collections.shuffle(pack);
+
+        //Make 12 piles
+        for (int i = 0; i < 12; i++) {
             board.add(new CopyOnWriteArrayList<Card>());
         }
-        //Deal to all 8 piles twice. Compiler will unroll anyway & easier to change
-        for (int i = 0; i < 2; i++) {
-            for (int j = 1; j < 9; j++) {
+        //Deal to all 12 piles 7 times
+        for (int i = 0; i < 7; i++) {
+            for (int j = 0; j < 12; j++) {
                 //Want them all unrevealed
-                board.get(j).add(firstPack.remove(0));
+                board.get(j).add(pack.remove(0));
                 repaintWhileDealing(panel);
             }
-        }
-
-        //Deal piles with upside down except last one
-        for (int i = 1; i < 9; i++) {
-            Card next = firstPack.remove(0);
-            next.setRevealed(true);
-            board.get(i).add(next);
+            deck.add(pack.remove(0));
             repaintWhileDealing(panel);
-            for (int j = i + 1; j < 9; j++) {
-                board.get(j).add(firstPack.remove(0));
-                repaintWhileDealing(panel);
 
-            }
         }
-        List<Card> secondPack = new ArrayList<Card>();
-        makePack(secondPack, true,true);
-        Collections.shuffle(secondPack);
-        board.get(0).add(secondPack.remove(0));
+        deck.add(pack.remove(0));
         repaintWhileDealing(panel);
-        board.get(9).add(secondPack.remove(0));
-        repaintWhileDealing(panel);
-        deck.addAll(secondPack);
-        repaintWhileDealing(panel);
+
     }
 
     private static void repaintWhileDealing(CardPanel panel) {
@@ -98,10 +105,15 @@ public class CardGame {
     }
 
 
-    private void makePack(List<Card> cardList, boolean isRevealed, boolean blueBack) {
+    private void makePacks(List<Card> cardList) {
         for (Card.Suit suit : Card.Suit.values()) {
-            for (Card.Rank rank : Card.Rank.values()) {
-                cardList.add(new Card(suit, rank, isRevealed, blueBack));
+            //No kings.
+            for (int i = 0; i < Card.Rank.values().length - 1; i++) {
+                cardList.add(new Card(suit, Card.Rank.values()[i], true));
+            }
+            //No kings or aces.
+            for (int i = 1; i < Card.Rank.values().length - 1; i++) {
+                cardList.add(new Card(suit, Card.Rank.values()[i], true));
             }
         }
     }
@@ -111,10 +123,9 @@ public class CardGame {
     }
 
     public String moveCardOntoCardFromTopRow(int boardIndexFrom, int boardIndexTo) {
-        List<Card> from = topRow.get(boardIndexFrom);
-        String result = moveCardOntoCard(from, boardIndexTo, from.size() - 1);
+        String result = moveCardOntoCard(hand, boardIndexTo, hand.size() - 1);
         if (result.isEmpty()) {
-            from.remove(from.size() - 1);
+            hand.remove(hand.size() - 1);
         }
         return result;
     }
@@ -153,7 +164,7 @@ public class CardGame {
         }
         if (firstToMove.getRank().ordinal() == lastInRow.getRank().ordinal() - 1) {
             if (listIndexFrom < from.size() - 1) {
-                if (suitMoveIsValid(firstToMove.getSuit(),lastInRow.getSuit())) {
+                if (suitMoveIsValid(firstToMove.getSuit(), lastInRow.getSuit())) {
                     for (int i = listIndexFrom; i < from.size(); i++) {
                         to.add(from.get(i));
                     }
@@ -209,15 +220,14 @@ public class CardGame {
         return true;
     }
 
-    public List<List<Card>> getTopRow() {
-        return Collections.unmodifiableList(topRow);
+    public List<Card> getHand() {
+        return Collections.unmodifiableList(hand);
     }
 
     public String moveCardOntoTopRowFromRow(int boardIndexFrom, int boardIndexTo) {
-        List<Card> from = topRow.get(boardIndexFrom);
-        String result = moveCardOntoTopRow(from, boardIndexTo, from.size() - 1);
+        String result = moveCardOntoTopRow(hand, boardIndexTo, hand.size() - 1);
         if (result.isEmpty()) {
-            from.remove(from.size() - 1);
+            hand.remove(hand.size() - 1);
         }
         return result;
 
@@ -234,17 +244,16 @@ public class CardGame {
 
     private String moveCardOntoTopRow(List<Card> from, int boardIndexTo, int listIndexFrom) {
 
-        List<Card> pile = topRow.get(boardIndexTo);
         Card fromTop = from.get(listIndexFrom);
-        if (pile.size() == 0) {
+        if (hand.size() == 0) {
             if (fromTop.getRank() == Card.Rank.ACE) {
-                pile.add(from.get(listIndexFrom));
+                hand.add(from.get(listIndexFrom));
                 return "";
             } else {
                 return "Can only move an Ace to an empty pile.";
             }
         } else {
-            Card pileTop = pile.get(pile.size() - 1);
+            Card pileTop = hand.get(hand.size() - 1);
             //Want reference equality
             if (pileTop == fromTop) {
                 //Don't want to move onto self, nor display warning
@@ -255,7 +264,7 @@ public class CardGame {
             }
             if (fromTop.getSuit().ordinal() == pileTop.getSuit().ordinal()) {
                 if (fromTop.getRank().ordinal() == pileTop.getRank().ordinal() + 1) {
-                    pile.add(from.get(listIndexFrom));
+                    hand.add(from.get(listIndexFrom));
                     return "";
                 } else {
                     return fromTop.getRank().name() + " is not one higher than " + pileTop.getRank().name();
@@ -273,7 +282,12 @@ public class CardGame {
 
     public boolean hasWon() {
 
-        for (List<Card> pile : topRow) {
+        for (List<Card> pile : acePiles) {
+            if (pile.size() != 13) {
+                return false;
+            }
+        }
+        for (List<Card> pile : kingPiles) {
             if (pile.size() != 13) {
                 return false;
             }
@@ -325,8 +339,12 @@ public class CardGame {
         return "";
     }
 
-    public String reveal(int boardIndexFrom, int toMoveTop) {
-        board.get(boardIndexFrom).get(toMoveTop).setRevealed(true);
-        return "";
+
+    public List<List<Card>> getAcePiles() {
+        return acePiles;
+    }
+
+    public List<List<Card>> getKingPiles() {
+        return kingPiles;
     }
 }

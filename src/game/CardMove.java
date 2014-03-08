@@ -11,19 +11,19 @@ import java.util.List;
 public class CardMove {
 
     private final int boardIndexFrom;
-    private final int toMoveTop;
+    private final int toMove;
     private final MOVE_TYPE moveType;
     private CardPanel panel;
     private int boardIndexTo = -1;
-    private boolean topRow;
-    private int numCardsMoved;
+    private boolean hand;
+    //private int numCardsMoved;
 
-    public CardMove(int toMoveTop, int boardIndexFrom, CardGame game) {
-        this.toMoveTop = toMoveTop;
+    public CardMove(int toMove, int boardIndexFrom, CardGame game) {
+        this.toMove = toMove;
         this.boardIndexFrom = boardIndexFrom;
         moveType = MOVE_TYPE.FROM_BOARD;
         List<Card> toHide = game.getBoard().get(boardIndexFrom);
-        for (int i = toMoveTop; i < toHide.size(); i++) {
+        for (int i = toMove; i < toHide.size(); i++) {
             toHide.get(i).setHidden(true);
         }
     }
@@ -31,28 +31,22 @@ public class CardMove {
     public CardMove(CardPanel panel) {
         this.panel = panel;
         //deck move
-        toMoveTop = -1;
+        toMove = -1;
         boardIndexFrom = -1;
         moveType = MOVE_TYPE.FROM_DECK;
     }
 
     public CardMove(int boardIndexFrom, CardGame game) {
-        toMoveTop = 1;
+        toMove = 1;
         this.boardIndexFrom = boardIndexFrom;
         moveType = MOVE_TYPE.FROM_PILE;
-        List<Card> pile = game.getTopRow().get(boardIndexFrom);
+        List<Card> pile = game.getHand();
         pile.get(pile.size() - 1).setHidden(true);
-    }
-
-    public CardMove(int boardIndexFrom, int toMoveTop) {
-        this.boardIndexFrom = boardIndexFrom;
-        this.toMoveTop = toMoveTop;
-        moveType = MOVE_TYPE.REVEAL;
     }
 
     public void cardReleased(int boardIndexTo, boolean topRow) {
         this.boardIndexTo = boardIndexTo;
-        this.topRow = topRow;
+        this.hand = topRow;
     }
 
     public String makeMove(CardGame game) {
@@ -63,8 +57,6 @@ public class CardMove {
             case FROM_BOARD:
                 if (boardIndexTo != -1) return makeBoardMove(game);
                 break;
-            case REVEAL:
-                return makeRevealMove(game);
             case FROM_PILE:
                 if (boardIndexTo != -1) return makePileMove(game);
                 break;
@@ -73,12 +65,8 @@ public class CardMove {
         return "ERROR";
     }
 
-    private String makeRevealMove(CardGame game) {
-        return game.reveal(boardIndexFrom, toMoveTop);
-    }
-
     private String makePileMove(CardGame game) {
-        if (topRow) {
+        if (hand) {
             return game.moveCardOntoTopRowFromRow(boardIndexFrom, boardIndexTo);
         } else {
             return game.moveCardOntoCardFromTopRow(boardIndexFrom, boardIndexTo);
@@ -90,15 +78,15 @@ public class CardMove {
     }
 
     private String makeBoardMove(CardGame game) {
-        if (topRow) {
+        if (hand) {
 
-            return game.moveCardOntoTopRowFromBoard(toMoveTop, boardIndexFrom, boardIndexTo);
+            return game.moveCardOntoTopRowFromBoard(toMove, boardIndexFrom, boardIndexTo);
         } else {
             //Need this in case we undo to see how many we moved easily (or at all?).
-            //If size = 6 and toMoveTop = 5, we moved 6-5 = 1 card
-            //If size = 6 and toMoveTop = 3, we moved 6-3 = 3 cards
-            numCardsMoved = game.getBoard().get(boardIndexFrom).size() - toMoveTop;
-            return game.moveCardOntoCardFromBoard(toMoveTop, boardIndexFrom, boardIndexTo);
+            //If size = 6 and toMove = 5, we moved 6-5 = 1 card
+            //If size = 6 and toMove = 3, we moved 6-3 = 3 cards
+            //numCardsMoved = game.getBoard().get(boardIndexFrom).size() - toMove;
+            return game.moveCardOntoCardFromBoard(toMove, boardIndexFrom, boardIndexTo);
         }
     }
 
@@ -106,12 +94,12 @@ public class CardMove {
         return boardIndexFrom;
     }
 
-    public int getToMoveTop() {
-        return toMoveTop;
+    public int getToMove() {
+        return toMove;
     }
 
     public String toString() {
-        return "FROM:" + boardIndexFrom + " TOP CARD INDEX: " + toMoveTop + (boardIndexTo == -1 ? "" : " TO " + boardIndexTo);
+        return "FROM:" + boardIndexFrom + " TOP CARD INDEX: " + toMove + (boardIndexTo == -1 ? "" : " TO " + boardIndexTo);
     }
 
     public MOVE_TYPE getMoveType() {
@@ -128,10 +116,8 @@ public class CardMove {
                 card.setHidden(false);
             }
         }
-        for (List<Card> cardList : game.getTopRow()) {
-            for (Card card : cardList) {
-                card.setHidden(false);
-            }
+        for (Card card : game.getHand()) {
+            card.setHidden(false);
         }
 
 
@@ -151,24 +137,22 @@ public class CardMove {
                 break;
             case FROM_BOARD:
                 List<Card> boardCol = game.getBoard().get(boardIndexFrom);
-                if (topRow) {
-                    List<Card> pile = game.getTopRow().get(boardIndexTo);
+                if (hand) {
+                    List<Card> pile = game.getHand();
                     boardCol.add(pile.remove(pile.size() - 1));
                 } else {
                     //The fun one
                     List<Card> otherCol = game.getBoard().get(boardIndexTo);
-                    for (int i = otherCol.size() - numCardsMoved; i < otherCol.size(); ) {
-                        boardCol.add(otherCol.remove(i));
-                    }
+                    // for (int i = otherCol.size() - numCardsMoved; i < otherCol.size(); ) {
+                    //    boardCol.add(otherCol.remove(i));
+                    //  }
+                    boardCol.add(otherCol.remove(otherCol.size() - 1));
                 }
                 break;
-            case REVEAL:
-                game.getBoard().get(boardIndexFrom).get(toMoveTop).setRevealed(false);
-                break;
             case FROM_PILE:
-                List<Card> pile = game.getTopRow().get(boardIndexFrom);
-                if (topRow) {
-                    List<Card> otherPile = game.getTopRow().get(boardIndexTo);
+                List<Card> pile = game.getHand();
+                if (hand) {
+                    List<Card> otherPile = game.getHand();
                     pile.add(otherPile.remove(otherPile.size() - 1));
                 } else {
                     List<Card> col = game.getBoard().get(boardIndexTo);
@@ -178,5 +162,5 @@ public class CardMove {
         }
     }
 
-    public static enum MOVE_TYPE {FROM_DECK, FROM_BOARD, REVEAL, FROM_PILE}
+    public static enum MOVE_TYPE {FROM_DECK, FROM_BOARD, FROM_PILE}
 }
