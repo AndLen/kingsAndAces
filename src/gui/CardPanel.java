@@ -1,9 +1,6 @@
 package gui;
 
-import game.Card;
-import game.CardGame;
-import game.CardMove;
-import game.StorageManager;
+import game.*;
 
 import javax.swing.*;
 import java.awt.*;
@@ -11,7 +8,7 @@ import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.List;
-import java.util.Queue;
+import java.util.Stack;
 
 /**
  * Created by Andrew on 28/12/13.
@@ -73,6 +70,9 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private void renderKingPile(Graphics2D g) {
         double x = X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP;
         double y = Y_BOARD_OFFSET;
+        g.setColor(Color.white);
+        g.drawString("King Down", (int) x, (int) y - 1);
+
         for (List<Card> kingPile : game.getKingPiles()) {
             if (kingPile.size() > 0) {
                 renderCard(kingPile.get(kingPile.size() - 1), g, x, y);
@@ -84,6 +84,8 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private void renderAcePile(Graphics2D g) {
         double x = X_BOARD_OFFSET + CARD_WIDTH * 6 + CARD_X_GAP * 6;
         double y = Y_BOARD_OFFSET;
+        g.setColor(Color.white);
+        g.drawString("Ace Up", (int) x, (int) y - 1);
         for (List<Card> acePile : game.getAcePiles()) {
             if (acePile.size() > 0) {
                 renderCard(acePile.get(acePile.size() - 1), g, x, y);
@@ -109,7 +111,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     }
 
     private void renderDeck(Graphics2D g) {
-        Queue<Card> deck = game.getDeck();
+        Stack<Card> deck = game.getDeck();
         Card topCard = deck.size() == 0 ? null : deck.peek();
 
         double x = X_BOARD_OFFSET;
@@ -130,21 +132,25 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
 
     private void renderDragCards(Graphics2D g, List<List<Card>> gameBoard) {
         if (activeMove != null && activeX != -1 && activeY != -1) {
-            if (activeMove.getMoveType() == CardMove.MOVE_TYPE.FROM_DECK) {
-                renderCard(game.getDeck().peek(), g, activeX - (CARD_WIDTH / 2), activeY);
-            } else if (activeMove.getMoveType() == CardMove.MOVE_TYPE.FROM_PILE) {
-                int index = activeMove.getBoardIndexFrom();
-                List<Card> pile = game.getHand();
-                renderCard(pile.get(pile.size() - 1), g, activeX - (CARD_WIDTH / 2), activeY);
+            if (activeMove.getMoveType() == CardMove.MOVE_TYPE_FROM.FROM_HAND) {
+                List<Card> from = game.getHand().getList();
+                renderCard(from.get(activeMove.getIndexFrom()), g, activeX - (CARD_WIDTH / 2), activeY);
             } else {
-                List<Card> beingDragged = gameBoard.get(activeMove.getBoardIndexFrom());
-                double currY = activeY;
-                for (int i = activeMove.getToMove(); i < beingDragged.size(); i++) {
-
-                    //Render so the top of cards are centered on the mouse
-                    renderCard(beingDragged.get(i), g, activeX - (CARD_WIDTH / 2), currY);
-                    currY += CARD_Y_GAP;
+                List<Card> from = null;
+                switch (activeMove.getMoveType()) {
+                    case FROM_ACE_PILES:
+                        from = game.getAcePiles().get(activeMove.getIndexFrom());
+                        break;
+                    case FROM_KING_PILES:
+                        from = game.getKingPiles().get(activeMove.getIndexFrom());
+                        break;
+                    case FROM_BOARD:
+                        from = game.getBoard().get(activeMove.getIndexFrom());
+                        break;
                 }
+                assert from != null;
+                renderCard(from.get(from.size() - 1), g, activeX - (CARD_WIDTH / 2), activeY);
+
             }
         }
     }
@@ -170,71 +176,52 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
                 }
             }
 
-            if (cards.size() > 1) {
+            if (cards.size() > 0) {
+                g.setColor(Color.white);
+                int size = cards.size();
+                g.drawString(size + (size == 1 ? " card" : " cards"), (int) x, (int) y - 1);
                 renderCard(cards.get(cards.size() - 1), g, x, y);
             }
 
         }
     }
 
-//    //Note that in the context of Tom, the unrevealed cards do not affect the sizing.
-//    private int indexToStartFrom(List<Card> cards, boolean dragonsTail, int firstRevealed) {
-//        double maxSize = dragonsTail ? DECK_Y : getHeight();
-//        //Required as when game is started, maxSize = 0..otherwise doesn't render..odd?
-//        maxSize = maxSize > 10 ? maxSize - 10 : 10;
-//        int numRevealed = Math.max(0, cards.size() - firstRevealed);
-//        double cardsYSize = Y_BOARD_OFFSET + (CARD_Y_GAP * numRevealed) + (CARD_HEIGHT - CARD_Y_GAP);
-//
-//        int indexToStartFrom = firstRevealed;
-//        while (cardsYSize > maxSize) {
-//            cardsYSize -= CARD_Y_GAP;
-//            indexToStartFrom++;
-//        }
-//        return indexToStartFrom;
-//    }
 
     private void renderHandIfAny(Graphics2D g) {
-        //TODO
-        if (game.getBoard().size() == 0) {
-            return;
-        }
-        List<Card> hand = game.getBoard().get(0);
-        final double HAND_WIDTH = 3 * CARD_X_GAP + 4 * CARD_WIDTH;
-        final double wantedHandWidth = Math.max(HAND_WIDTH, hand.size() *CARD_WIDTH);
+        Hand hand = game.getHand();
+        if (hand.getIndex() != -1 && hand.getList().size() > 0) {
 
-        final double HAND_X_OVERLAP = (wantedHandWidth - HAND_WIDTH) / hand.size();
-        double x = X_BOARD_OFFSET + 2 * CARD_WIDTH + 2 * CARD_X_GAP;
-        double y = Y_BOARD_OFFSET + 3.5 * CARD_HEIGHT + 3 * CARD_Y_GAP;
-        for (Card card : hand) {
-            renderCard(card, g, x, y);
-            x += HAND_X_OVERLAP;
+            final double handXGap = handXGap(hand.getList().size());
+
+            double x = handXStart();
+            double y = handYStart();
+            for (Card card : hand.getList()) {
+                renderCard(card, g, x, y);
+                x += handXGap + CARD_WIDTH;
+            }
         }
 
-//        List<List<Card>> topRow = game.getHand();
-//        //We're one futher along as 8 in top row vs 10 in board
-//        double x = X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP;
-//        double y = CARD_Y_GAP;
-//        for (List<Card> cards : topRow) {
-//            if (cards.size() > 0) {
-//                Card toRender = cards.get(cards.size() - 1);
-//                //If top of pile isn't hidden, render that
-//                if (!toRender.isHidden()) {
-//                    renderCard(toRender, g, x, y);
-//
-//                }//Otherwise, render the 2nd highest if it exists
-//                else if (cards.size() > 1) {
-//                    renderCard(cards.get(cards.size() - 2), g, x, y);
-//                }//Only one card in pile, so render empty.
-//                else {
-//                    renderCard(null, g, x, y);
-//                }
-//
-//            } else {
-//                renderCard(null, g, x, y);
-//            }
-//            x += CARD_WIDTH + CARD_X_GAP;
-        //}
+    }
 
+    private double handXGap(int handSize) {
+        return (3 * CARD_X_GAP + 4 * CARD_WIDTH - handSize * CARD_WIDTH) / (handSize - 1);
+    }
+
+    private double handXStart() {
+        return X_BOARD_OFFSET + 2 * CARD_WIDTH + 2 * CARD_X_GAP;
+    }
+
+    private double handXEnd() {
+        return handXStart() + 4 * CARD_WIDTH + 3 * CARD_X_GAP;
+
+    }
+
+    private double handYStart() {
+        return Y_BOARD_OFFSET + 3.5 * CARD_HEIGHT + 3 * CARD_Y_GAP;
+    }
+
+    private double handYEnd() {
+        return handYStart() + CARD_HEIGHT;
     }
 
     private void renderUpsideDownCard(Graphics2D g, double x, double y, boolean blue) {
@@ -302,27 +289,27 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     public void mousePressed(MouseEvent e) {
 
         try {
-            if (e.getX() < X_BOARD_OFFSET || e.getX() > (getWidth() - X_BOARD_OFFSET)) {
+            if (e.getX() < X_BOARD_OFFSET || e.getX() > (getWidth() - X_BOARD_OFFSET) || e.getY() < Y_BOARD_OFFSET) {
                 //Clicked off the board, nothing to do with us.
                 return;
             }
-            System.out.println(System.currentTimeMillis() - LAST_PRESS);
-            //Was 200
             if ((System.currentTimeMillis() - LAST_PRESS) < 400) {
                 NUMBER_CLICKS++;
             } else {
                 NUMBER_CLICKS = 0;
             }
             LAST_PRESS = System.currentTimeMillis();
-
-            if (e.getY() < Y_BOARD_OFFSET) {
-                processMoveFromTopRow(e);
-            } else if (clickedOnDeck(e)) {
-                processMoveFromDeck();
+            if (clickedOnDeck(e)) {
+                if (game.hasDealt()) processDeckClick();
+            } else if (clickedOnHand(e)) {
+                if (game.hasDealt()) processMoveFromHand(e);
+            } else if (clickedOnKingPile(e)) {
+                if (game.hasDealt()) processMoveFromKingPile(e);
+            } else if (clickedOnAcePile(e)) {
+                if (game.hasDealt()) processMoveFromAcePile(e);
             } else {
                 processMoveFromBoard(e);
             }
-
 
             System.out.println(activeMove);
             activeX = e.getX();
@@ -332,6 +319,47 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         }
     }
 
+    private void processMoveFromAcePile(MouseEvent e) {
+        int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
+        if (index < 4) {
+            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_ACE_PILES);
+        }
+
+    }
+
+    private void processMoveFromKingPile(MouseEvent e) {
+        int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
+        if (index < 4) {
+            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_KING_PILES);
+        }
+    }
+
+    private boolean clickedOnKingPile(MouseEvent e) {
+        //Beautiful
+        return e.getX() >= X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP && e.getX() <= X_BOARD_OFFSET + CARD_WIDTH * 2 + CARD_X_GAP && e.getY() >= Y_BOARD_OFFSET && e.getY() < Y_BOARD_OFFSET + CARD_HEIGHT * 4 + CARD_Y_GAP * 3;
+    }
+
+    private boolean clickedOnAcePile(MouseEvent e) {
+        return e.getX() >= X_BOARD_OFFSET + CARD_WIDTH * 6 + CARD_X_GAP * 6 && e.getX() <= X_BOARD_OFFSET + CARD_WIDTH * 7 + CARD_X_GAP * 6 && e.getY() >= Y_BOARD_OFFSET && e.getY() < Y_BOARD_OFFSET + CARD_HEIGHT * 4 + CARD_Y_GAP * 3;
+
+    }
+
+    private void processMoveFromHand(MouseEvent e) {
+        List<Card> hand = game.getHand().getList();
+        if (hand.size() > 0) {
+
+            final double handXGap = handXGap(hand.size());
+
+            int index = (int) ((e.getX() - handXStart()) / (handXGap + CARD_WIDTH));
+            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_HAND);
+
+        }
+    }
+
+    private boolean clickedOnHand(MouseEvent e) {
+        return e.getX() >= handXStart() && e.getX() <= handXEnd() && e.getY() >= handYStart() && e.getY() <= handYEnd();
+    }
+
     @Override
     public void mouseReleased(MouseEvent e) {
         //Don't want multiple threads in here really
@@ -339,23 +367,26 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
             try {
                 if (e.getX() < X_BOARD_OFFSET || e.getX() > (getWidth() - X_BOARD_OFFSET)) {
                     //Clicked off the board, nothing to do with us.
-                    if (activeMove != null) activeMove.unhideCards(game);
                     activeMove = null;
                     return;
                 }
 
-                if (NUMBER_CLICKS == 1) {
-                    doubleClick(e);
-                    NUMBER_CLICKS = 0;
-                } else if (clickedOnDeck(e)) {
-                    //Do nothing
-
-                } else if (e.getY() < Y_BOARD_OFFSET) {
-                    processMoveToTopRow(e);
-                } else {
-                    processMoveToBoard(e);
+                if (clickedOnDeck(e)) {
+                    if (game.canAddToDeckFromBoard()) {
+                        processAddToDeck(e);
+                    }
+                    //Otherwise do nothing
+                } else if (game.hasDealt()) {
+                    if (clickedOnHand(e)) {
+                        processMoveToHand(e);
+                    } else if (clickedOnKingPile(e)) {
+                        processMoveToKingPile(e);
+                    } else if (clickedOnAcePile(e)) {
+                        processMoveToAcePile(e);
+                    } else {
+                        //Do nothing - can't move to board.
+                    }
                 }
-                if (activeMove != null) activeMove.unhideCards(game);
                 activeMove = null;
             } finally {
                 this.repaint();
@@ -375,126 +406,83 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         }
     }
 
-    private void processMoveFromBoard(MouseEvent e) {
-        int col = findCol(e.getX(), false);
-        List<Card> possibleCards = game.getBoard().get(col);
-        int index = findCardIndex(possibleCards, e.getY(), col == 0);
-        if (index == -1) {
-            if (e.getY() > Y_BOARD_OFFSET && e.getY() < Y_BOARD_OFFSET + CARD_HEIGHT) {
-//                if (possibleCards.size() > 0) {
-//                    CardMove unHide = new CardMove(col, possibleCards.size() - 1);
-//                    processMoveResult(unHide.makeMove(game), unHide);
-//                    //reveal it}
-//                }
-                //Indicates none found.
-                return;
-            }
-        }
+    private void processAddToDeck(MouseEvent e) {
+        String result = game.addToDeck(activeMove);
+        processMoveResult(result, activeMove);
+    }
 
-        if (possibleCards.get(index) != null) {
-            Card card = possibleCards.get(index);
-            if (game.isValidNewMove(col, index)) {
-                activeMove = new CardMove(index, col, game);
-            } else {
-                storeError("Cannot move that card, cards beneath it are not the same suit or correctly ordered");
-            }
+    private void processMoveToHand(MouseEvent e) {
+        List<Card> hand = game.getHand().getList();
+        if (hand.size() > 0) {
+
+            final double handXGap = handXGap(hand.size());
+
+            int indexTo = (int) ((e.getX() - handXStart()) / (handXGap + CARD_WIDTH));
+            String result = game.makeHandMove(activeMove.getIndexFrom(), indexTo);
+            processMoveResult(result, activeMove);
 
         }
     }
 
-    private void processMoveFromDeck() {
+    private void processMoveToAcePile(MouseEvent e) {
+        int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
+        if (index < 4) {
+            activeMove.cardReleased(index, true);
+            String result = activeMove.makeMove(game);
+            processMoveResult(result, activeMove);
+        }
+    }
+
+    private void processMoveToKingPile(MouseEvent e) {
+        int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
+        if (index < 4) {
+            activeMove.cardReleased(index, false);
+            String result = activeMove.makeMove(game);
+            processMoveResult(result, activeMove);
+        }
+    }
+
+
+    private void processDeckClick() {
         //Can assume did click on the deck.
-        final Queue<Card> deck = game.getDeck();
+        final Stack<Card> deck = game.getDeck();
         if (!deck.isEmpty()) {
-            activeMove = new CardMove(this);
-            processMoveResult(activeMove.makeMove(game), activeMove);
+            Card fromDeck = deck.pop();
+            game.updateHand(fromDeck);
         }
+
     }
 
-    private void processMoveFromTopRow(MouseEvent e) {
-        int col = findCol(e.getX(), true);
-        activeMove = new CardMove(col, game);
-    }
-
-    private int findCol(int xPressed, boolean topRow) {
-        if (topRow) {
-            xPressed -= (X_BOARD_OFFSET + CARD_WIDTH + CARD_X_GAP);
-        } else {
-            xPressed -= X_BOARD_OFFSET;
-        }
+    private int findCol(int xPressed) {
+        xPressed -= X_BOARD_OFFSET + CARD_WIDTH * 2 + CARD_X_GAP * 2;
         int col = (int) (xPressed / (CARD_WIDTH + CARD_X_GAP));
         System.out.println("Col: " + col);
         return col;
     }
 
-
-    private int findCardIndex(List<Card> cards, int yPressed, boolean isDragonsTail) {
-
-        int index = (int) ((yPressed - Y_BOARD_OFFSET) / (CARD_Y_GAP));
-
-
-        System.out.println("Index: " + index);
-        return index;
+    private int findRow(int yPressed) {
+        yPressed -= Y_BOARD_OFFSET + CARD_HEIGHT / 2;
+        int row = (int) (yPressed / (CARD_HEIGHT + CARD_Y_GAP));
+        System.out.println("Row: " + row);
+        return row;
     }
 
+
     private boolean clickedOnDeck(MouseEvent e) {
-        return (findCol(e.getX(), false) == 0 && e.getY() >= DECK_Y);
+        return e.getX() >= X_BOARD_OFFSET && e.getX() <= X_BOARD_OFFSET + CARD_WIDTH && e.getY() >= DECK_Y && e.getY() <= DECK_Y + CARD_HEIGHT;
     }
 
     private void doubleClick(MouseEvent e) {
-        System.out.println("DOUBLE CLICK");
-        if (clickedOnDeck(e)) {
-            if (!game.getDeck().isEmpty()) {
-                CardMove toMove = new CardMove(this);
-                String result = toMove.makeMove(game);
-                processMoveResult(result, toMove);
-            }
-        } else if (e.getY() > Y_BOARD_OFFSET) {
-            int col = findCol(e.getX(), false);
-            List<Card> cardList = game.getBoard().get(col);
-            Card toSendUp = cardList.get(cardList.size() - 1);
-            int pileIndex = pileIndexToSendTo(toSendUp);
-            System.out.println("sending to pile " + pileIndex);
-            if (pileIndex != -1) {
-                CardMove toMove = new CardMove(cardList.size() - 1, col, game);
-                toMove.cardReleased(pileIndex, true);
-                String result = toMove.makeMove(game);
-                processMoveResult(result, toMove);
-            } else {
-                storeError("Cannot send that to the top");
-            }
-        }
+        //Do nothing atm
     }
 
-    private int pileIndexToSendTo(Card toSendUp) {
-//        List<List<Card>> topRow = game.getHand();
-//        for (int i = 0; i < topRow.size(); i++) {
-//            List<Card> pile = topRow.get(i);
-//            if (toSendUp.getRank() == Card.Rank.ACE) {
-//                //find empty
-//                if (pile.isEmpty()) {
-//                    return i;
-//                }
-//            } else if (!pile.isEmpty()) {
-//                Card topOfPile = pile.get(pile.size() - 1);
-//                if (toSendUp.matchesAndOneAbove(topOfPile)) {
-//                    return i;
-//                }
-//            }
-//        }
-        return -1;
-    }
-
-    private void processMoveToBoard(MouseEvent e) {
-        int col = findCol(e.getX(), false);
-
-        if (activeMove != null) {
-            activeMove.cardReleased(col, false);
-            System.out.println("Moving:" + activeMove);
-            String result = activeMove.makeMove(game);
-            processMoveResult(result, activeMove);
+    private void processMoveFromBoard(MouseEvent e) {
+        int row = findRow(e.getY());
+        int col = findCol(e.getX());
+        int index = row * 4 + col;
+        if (index > -1 && index < 12) {
+            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_BOARD);
         }
-
     }
 
     private void processMoveResult(String result, CardMove move) {
@@ -505,16 +493,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         }
     }
 
-    private void processMoveToTopRow(MouseEvent e) {
-        if (activeMove != null) {
-            int col = findCol(e.getX(), true);
-            activeMove.cardReleased(col, true);
-            String result = activeMove.makeMove(game);
-            processMoveResult(result, activeMove);
-        }
-    }
-
-    private void storeError(final String error) {
+    public void storeError(final String error) {
         //Render and disappear it
         new Thread() {
             public void run() {

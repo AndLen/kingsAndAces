@@ -1,8 +1,5 @@
 package game;
 
-import gui.CardPanel;
-
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -10,157 +7,115 @@ import java.util.List;
  */
 public class CardMove {
 
-    private final int boardIndexFrom;
-    private final int toMove;
-    private final MOVE_TYPE moveType;
-    private CardPanel panel;
-    private int boardIndexTo = -1;
-    private boolean hand;
-    //private int numCardsMoved;
+    private final int indexFrom;
+    private final MOVE_TYPE_FROM moveType;
+    private int indexTo = -1;
+    private boolean toAce;
 
-    public CardMove(int toMove, int boardIndexFrom, CardGame game) {
-        this.toMove = toMove;
-        this.boardIndexFrom = boardIndexFrom;
-        moveType = MOVE_TYPE.FROM_BOARD;
-        List<Card> toHide = game.getBoard().get(boardIndexFrom);
-        for (int i = toMove; i < toHide.size(); i++) {
-            toHide.get(i).setHidden(true);
-        }
+    public CardMove(int indexFrom, MOVE_TYPE_FROM move_typeFROM) {
+        this.indexFrom = indexFrom;
+        this.moveType = move_typeFROM;
     }
 
-    public CardMove(CardPanel panel) {
-        this.panel = panel;
-        //deck move
-        toMove = -1;
-        boardIndexFrom = -1;
-        moveType = MOVE_TYPE.FROM_DECK;
-    }
-
-    public CardMove(int boardIndexFrom, CardGame game) {
-        toMove = 1;
-        this.boardIndexFrom = boardIndexFrom;
-        moveType = MOVE_TYPE.FROM_PILE;
-        List<Card> pile = game.getHand();
-        pile.get(pile.size() - 1).setHidden(true);
-    }
-
-    public void cardReleased(int boardIndexTo, boolean topRow) {
-        this.boardIndexTo = boardIndexTo;
-        this.hand = topRow;
+    public void cardReleased(int indexTo, boolean toAce) {
+        this.indexTo = indexTo;
+        this.toAce = toAce;
     }
 
     public String makeMove(CardGame game) {
-        switch (moveType) {
+        if (indexTo != -1) {
 
-            case FROM_DECK:
-                return makeDeckMove(game);
-            case FROM_BOARD:
-                if (boardIndexTo != -1) return makeBoardMove(game);
-                break;
-            case FROM_PILE:
-                if (boardIndexTo != -1) return makePileMove(game);
-                break;
+            switch (moveType) {
+
+                case FROM_ACE_PILES:
+                    return makeAcePilesMove(game);
+
+                case FROM_KING_PILES:
+                    return makeKingPilesMove(game);
+                case FROM_BOARD:
+                    return makeBoardMove(game);
+                case FROM_HAND:
+                    return makeHandMove(game);
+            }
         }
-
         return "ERROR";
     }
 
-    private String makePileMove(CardGame game) {
-        if (hand) {
-            return game.moveCardOntoTopRowFromRow(boardIndexFrom, boardIndexTo);
+    private String makeHandMove(CardGame game) {
+        if (toAce) {
+            return game.moveCardOntoAceFromHand(indexFrom, indexTo);
         } else {
-            return game.moveCardOntoCardFromTopRow(boardIndexFrom, boardIndexTo);
-        }
-    }
+            return game.moveCardOntoKingFromHand(indexFrom, indexTo);
 
-    private String makeDeckMove(CardGame game) {
-        return game.dealDeck(panel);
+        }
     }
 
     private String makeBoardMove(CardGame game) {
-        if (hand) {
-
-            return game.moveCardOntoTopRowFromBoard(toMove, boardIndexFrom, boardIndexTo);
+        if (toAce) {
+            return game.moveCardOntoAceFromBoard(indexFrom, indexTo);
         } else {
-            //Need this in case we undo to see how many we moved easily (or at all?).
-            //If size = 6 and toMove = 5, we moved 6-5 = 1 card
-            //If size = 6 and toMove = 3, we moved 6-3 = 3 cards
-            //numCardsMoved = game.getBoard().get(boardIndexFrom).size() - toMove;
-            return game.moveCardOntoCardFromBoard(toMove, boardIndexFrom, boardIndexTo);
+            return game.moveCardOntoKingFromBoard(indexFrom, indexTo);
+
         }
     }
 
-    public int getBoardIndexFrom() {
-        return boardIndexFrom;
+    private String makeKingPilesMove(CardGame game) {
+        if (toAce) {
+            return game.moveCardOntoAceFromKing(indexFrom, indexTo);
+        } else {
+            return "Can only move to a pile of the same suit";
+
+        }
     }
 
-    public int getToMove() {
-        return toMove;
+    private String makeAcePilesMove(CardGame game) {
+        if (toAce) {
+            return "Can only move to a pile of the same suit";
+        } else {
+            return game.moveCardOntoKingFromAce(indexFrom, indexTo);
+
+        }
+
     }
+
+
+    public int getIndexFrom() {
+        return indexFrom;
+    }
+
 
     public String toString() {
-        return "FROM:" + boardIndexFrom + " TOP CARD INDEX: " + toMove + (boardIndexTo == -1 ? "" : " TO " + boardIndexTo);
+        return "FROM:" + indexFrom + (indexTo == -1 ? "" : " TO " + indexTo);
     }
 
-    public MOVE_TYPE getMoveType() {
+    public MOVE_TYPE_FROM getMoveType() {
         return moveType;
     }
 
-    public void unhideCards(CardGame game) {
-        //Not efficient, but easy
-        if (!game.getDeck().isEmpty()) {
-            game.getDeck().peek().setHidden(false);
-        }
-        for (List<Card> cardList : game.getBoard()) {
-            for (Card card : cardList) {
-                card.setHidden(false);
-            }
-        }
-        for (Card card : game.getHand()) {
-            card.setHidden(false);
-        }
-
-
-    }
-
     public void undo(CardGame game) {
+        if (moveType == MOVE_TYPE_FROM.FROM_HAND) {
+            List<Card> hand = game.getHand().getList();
+            hand.add(indexFrom, hand.remove(indexTo));
+        } else {
+            List<Card> to = null;
+            List<Card> from = toAce ? game.getAcePiles().get(indexTo) : game.getKingPiles().get(indexTo);
+            switch (moveType) {
+                case FROM_ACE_PILES:
+                    to = game.getAcePiles().get(indexFrom);
+                    break;
+                case FROM_KING_PILES:
+                    to = game.getKingPiles().get(indexFrom);
+                    break;
+                case FROM_BOARD:
+                    to = game.getBoard().get(indexFrom);
+                    break;
 
-        switch (moveType) {
-            case FROM_DECK:
-                //This sucks a bit
-                LinkedList<Card> queueList = (LinkedList<Card>) game.getDeck();
-                List<List<Card>> board = game.getBoard();
-                for (int i = board.size() - 1; i >= 0; i--) {
-                    List<Card> cardList = board.get(i);
-                    queueList.add(0, cardList.remove(cardList.size() - 1));
-                }
-                break;
-            case FROM_BOARD:
-                List<Card> boardCol = game.getBoard().get(boardIndexFrom);
-                if (hand) {
-                    List<Card> pile = game.getHand();
-                    boardCol.add(pile.remove(pile.size() - 1));
-                } else {
-                    //The fun one
-                    List<Card> otherCol = game.getBoard().get(boardIndexTo);
-                    // for (int i = otherCol.size() - numCardsMoved; i < otherCol.size(); ) {
-                    //    boardCol.add(otherCol.remove(i));
-                    //  }
-                    boardCol.add(otherCol.remove(otherCol.size() - 1));
-                }
-                break;
-            case FROM_PILE:
-                List<Card> pile = game.getHand();
-                if (hand) {
-                    List<Card> otherPile = game.getHand();
-                    pile.add(otherPile.remove(otherPile.size() - 1));
-                } else {
-                    List<Card> col = game.getBoard().get(boardIndexTo);
-                    pile.add(col.remove(col.size() - 1));
-                }
-                break;
+            }
+            assert to != null;
+            to.add(from.remove(from.size() - 1));
         }
     }
 
-    public static enum MOVE_TYPE {FROM_DECK, FROM_BOARD, FROM_PILE}
+    public static enum MOVE_TYPE_FROM {FROM_ACE_PILES, FROM_KING_PILES, FROM_BOARD, FROM_HAND}
+
 }

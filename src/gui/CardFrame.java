@@ -108,7 +108,8 @@ public class CardFrame implements ActionListener, WindowListener {
             showHelp();
         } else if (command.equals("Undo")) {
             synchronized (lock) {
-                game.undo();
+                //TODO: Reimplement
+                //game.undo();
                 panel.repaint();
             }
         } else if (command.equals("Stats")) {
