@@ -31,6 +31,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private final Object lock = new Object();
     //Moving cards
     private CardMove activeMove = null;
+
     private int activeX = -1;
     private int activeY = -1;
     private boolean successfulPaint = false;
@@ -131,21 +132,22 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     }
 
     private void renderDragCards(Graphics2D g, List<List<Card>> gameBoard) {
-        if (activeMove != null && activeX != -1 && activeY != -1) {
-            if (activeMove.getMoveType() == CardMove.MOVE_TYPE_FROM.FROM_HAND) {
+        if (activeMove != null && activeMove instanceof CardMoveImpl && activeX != -1 && activeY != -1) {
+            CardMoveImpl move = (CardMoveImpl) activeMove;
+            if (move.getMoveTypeFrom() == CardMoveImpl.MOVE_TYPE_FROM.FROM_HAND) {
                 List<Card> from = game.getHand().getList();
-                renderCard(from.get(activeMove.getIndexFrom()), g, activeX - (CARD_WIDTH / 2), activeY);
+                renderCard(from.get(move.getIndexFrom()), g, activeX - (CARD_WIDTH / 2), activeY);
             } else {
                 List<Card> from = null;
-                switch (activeMove.getMoveType()) {
+                switch (move.getMoveTypeFrom()) {
                     case FROM_ACE_PILES:
-                        from = game.getAcePiles().get(activeMove.getIndexFrom());
+                        from = game.getAcePiles().get(move.getIndexFrom());
                         break;
                     case FROM_KING_PILES:
-                        from = game.getKingPiles().get(activeMove.getIndexFrom());
+                        from = game.getKingPiles().get(move.getIndexFrom());
                         break;
                     case FROM_BOARD:
-                        from = game.getBoard().get(activeMove.getIndexFrom());
+                        from = game.getBoard().get(move.getIndexFrom());
                         break;
                 }
                 assert from != null;
@@ -189,7 +191,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
 
     private void renderHandIfAny(Graphics2D g) {
         Hand hand = game.getHand();
-        if (hand.getIndex() != -1 && hand.getList().size() > 0) {
+        if (hand != null && hand.getIndex() != -1 && hand.getList().size() > 0) {
 
             final double handXGap = handXGap(hand.getList().size());
 
@@ -322,7 +324,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private void processMoveFromAcePile(MouseEvent e) {
         int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
         if (index < 4) {
-            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_ACE_PILES);
+            activeMove = new CardMoveImpl(index, CardMoveImpl.MOVE_TYPE_FROM.FROM_ACE_PILES);
         }
 
     }
@@ -330,7 +332,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private void processMoveFromKingPile(MouseEvent e) {
         int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
         if (index < 4) {
-            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_KING_PILES);
+            activeMove = new CardMoveImpl(index, CardMoveImpl.MOVE_TYPE_FROM.FROM_KING_PILES);
         }
     }
 
@@ -351,7 +353,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
             final double handXGap = handXGap(hand.size());
 
             int index = (int) ((e.getX() - handXStart()) / (handXGap + CARD_WIDTH));
-            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_HAND);
+            activeMove = new CardMoveImpl(index, CardMoveImpl.MOVE_TYPE_FROM.FROM_HAND);
 
         }
     }
@@ -418,7 +420,8 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
             final double handXGap = handXGap(hand.size());
 
             int indexTo = (int) ((e.getX() - handXStart()) / (handXGap + CARD_WIDTH));
-            String result = game.makeHandMove(activeMove.getIndexFrom(), indexTo);
+            activeMove.cardReleased(indexTo, CardMoveImpl.MOVE_TYPE_TO.TO_HAND);
+            String result = activeMove.makeMove(game);
             processMoveResult(result, activeMove);
 
         }
@@ -427,7 +430,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private void processMoveToAcePile(MouseEvent e) {
         int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
         if (index < 4) {
-            activeMove.cardReleased(index, true);
+            activeMove.cardReleased(index, CardMoveImpl.MOVE_TYPE_TO.TO_ACE_PILES);
             String result = activeMove.makeMove(game);
             processMoveResult(result, activeMove);
         }
@@ -436,7 +439,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private void processMoveToKingPile(MouseEvent e) {
         int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
         if (index < 4) {
-            activeMove.cardReleased(index, false);
+            activeMove.cardReleased(index, CardMoveImpl.MOVE_TYPE_TO.TO_KING_PILES);
             String result = activeMove.makeMove(game);
             processMoveResult(result, activeMove);
         }
@@ -447,8 +450,9 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         //Can assume did click on the deck.
         final Stack<Card> deck = game.getDeck();
         if (!deck.isEmpty()) {
-            Card fromDeck = deck.pop();
-            game.updateHand(fromDeck);
+            activeMove = new DeckClickMove();
+            String result = activeMove.makeMove(game);
+            processMoveResult(result, activeMove);
         }
 
     }
@@ -481,7 +485,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         int col = findCol(e.getX());
         int index = row * 4 + col;
         if (index > -1 && index < 12) {
-            activeMove = new CardMove(index, CardMove.MOVE_TYPE_FROM.FROM_BOARD);
+            activeMove = new CardMoveImpl(index, CardMoveImpl.MOVE_TYPE_FROM.FROM_BOARD);
         }
     }
 
@@ -546,5 +550,46 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
 
     public boolean isReady() {
         return successfulPaint;
+    }
+
+    public void undo() {
+        if (game.getHistory().size() > 0) {
+            game.undo();
+
+        } else {
+            List<Card> pack = game.getPack();
+            if (game.canAddToDeckFromBoard()) {
+                //We don't want to do this halfway through a deal
+                if (pack != null) {
+                    Stack<Card> deck = game.getDeck();
+                    List<List<Card>> board = game.getBoard();
+
+                    if (deck.size() != 0 && deck.size() == board.get(0).size()) {
+                        pack.add(0, deck.pop());
+                    } else if (deck.size() == 8 && board.get(0).size() == 7) {
+                        //Special case where we deal 2 on the last one
+                        pack.add(0, deck.pop());
+                        pack.add(0, deck.pop());
+                        System.out.println("Special undo");
+                    }
+                    for (int i = board.size() - 1; i >= 0; i--) {
+                        List<Card> pile = board.get(i);
+                        if (pile.size() > 0) {
+                            pack.add(0, pile.remove(pile.size() - 1));
+                        }
+                    }
+                    if (game.hasDealt()) {
+                        new Thread() {
+                            public void run() {
+                                game.deal(CardPanel.this);
+
+                            }
+                        }.start();
+
+                    }
+                }
+
+            }
+        }
     }
 }

@@ -29,6 +29,9 @@ public class CardGame {
     private boolean canAddToDeckFromBoard = false;
     private boolean hasDealt = false;
 
+    //Shouldn't be used generally. Bit of a hack
+    private ArrayList<Card> pack = null;
+
     public CardGame(CardFrame cardFrame) {
         this.cardFrame = cardFrame;
         board = new CopyOnWriteArrayList<List<Card>>();
@@ -88,7 +91,7 @@ public class CardGame {
         acePiles.get(3).add(new Card(Card.Suit.SPADES, Card.Rank.ACE, true));
         repaintWhileDealing(panel);
 
-        List<Card> pack = new ArrayList<Card>();
+        pack = new ArrayList<Card>();
         makePacks(pack);
         Collections.shuffle(pack);
 
@@ -96,8 +99,21 @@ public class CardGame {
         for (int i = 0; i < 12; i++) {
             board.add(new CopyOnWriteArrayList<Card>());
         }
-        //Deal to all 12 piles 7 times
-        for (int i = 0; i < 7; i++) {
+        deal(panel);
+
+    }
+
+    public void deal(CardPanel panel) {
+        hasDealt = false;
+        repaintWhileDealing(panel);
+
+        //Deal to all 12 piles accounting for undos
+        while (pack.size() > 13) {
+            String msg = pack.size() == 14 ? "Hit Enter to finish dealing" : "Hit Enter to continue dealing";
+            panel.storeError(msg);
+
+            repaintWhileDealing(panel);
+            waitForEnter();
             for (int j = 0; j < 12; j++) {
                 //Want them all unrevealed
                 board.get(j).add(pack.remove(0));
@@ -105,13 +121,11 @@ public class CardGame {
             }
             //Get the user to check for adding to the deck
             canAddToDeckFromBoard = true;
-            String msg = i == 6 ? "Hit Enter to finish dealing" : "Hit Enter to continue dealing";
-            panel.storeError(msg);
-            repaintWhileDealing(panel);
-            waitForEnter();
-            canAddToDeckFromBoard = false;
 
-            deck.push(pack.remove(0));
+            if (deck.size() == board.get(0).size() - 1) {
+                //Only add to the deck if they didn't undo.
+                deck.push(pack.remove(0));
+            }
             repaintWhileDealing(panel);
 
         }
@@ -153,13 +167,16 @@ public class CardGame {
     }
 
     public List<List<Card>> getBoard() {
-        return Collections.unmodifiableList(board);
+        return board;
     }
 
     public Hand getHand() {
         return hand;
     }
 
+    public void setHand(Hand hand) {
+        this.hand = hand;
+    }
 
     public Stack<Card> getDeck() {
         return deck;
@@ -193,8 +210,8 @@ public class CardGame {
         if (!history.isEmpty()) {
             CardMove toUndo = history.pop();
             toUndo.undo(this);
-
         }
+
 
     }
 
@@ -207,7 +224,6 @@ public class CardGame {
         return history.size();
     }
 
-
     public List<List<Card>> getAcePiles() {
         return acePiles;
     }
@@ -215,7 +231,6 @@ public class CardGame {
     public List<List<Card>> getKingPiles() {
         return kingPiles;
     }
-
 
     public String makeHandMove(int indexFrom, int indexTo) {
         List<Card> handList = hand.getList();
@@ -246,7 +261,6 @@ public class CardGame {
             return moveCardOntoAcePile(from, -1, indexTo);
         }
     }
-
 
     public String moveCardOntoKingFromAce(int indexFrom, int indexTo) {
         List<Card> from = acePiles.get(indexFrom);
@@ -310,41 +324,34 @@ public class CardGame {
 
     }
 
-    public void updateHand(Card fromDeck) {
-        //Do this first in case we get the same index twice in a row!
-        if (hand != null && hand.getIndex() != -1) {
-            board.set(hand.getIndex(), hand.getList());
-        }
-
-        List<Card> toBeHand = board.get(fromDeck.getRank().ordinal());
-        toBeHand.add(fromDeck);
-
-        hand = new Hand(toBeHand, fromDeck.getRank().ordinal());
-        //Nothing there.
-        board.set(fromDeck.getRank().ordinal(), new CopyOnWriteArrayList<Card>());
-
-    }
-
     public boolean canAddToDeckFromBoard() {
         return canAddToDeckFromBoard;
     }
 
     public String addToDeck(CardMove activeMove) {
-        if (activeMove != null && activeMove.getMoveType() == CardMove.MOVE_TYPE_FROM.FROM_BOARD) {
-            List<Card> cards = board.get(activeMove.getIndexFrom());
-            Card topCard = cards.get(cards.size() - 1);
-            if (topCard.getRank().ordinal() == activeMove.getIndexFrom()) {
-                deck.push(cards.remove(cards.size() - 1));
-                return "";
-            } else {
-                return "Cannot add that to the deck, wrong rank";
+        if (activeMove != null && activeMove instanceof CardMoveImpl) {
+            CardMoveImpl move = (CardMoveImpl) activeMove;
+            if (move.getMoveTypeFrom() == CardMoveImpl.MOVE_TYPE_FROM.FROM_BOARD) {
+                List<Card> cards = board.get(move.getIndexFrom());
+                Card topCard = cards.get(cards.size() - 1);
+                if (topCard.getRank().ordinal() == move.getIndexFrom()) {
+                    deck.push(cards.remove(cards.size() - 1));
+                    return "";
+                } else {
+                    return "Cannot add that to the deck, wrong rank";
+                }
             }
         }
         return "Cannot move that to the deck.";
     }
 
-
     public boolean hasDealt() {
         return hasDealt;
     }
+
+    public ArrayList<Card> getPack() {
+        return pack;
+    }
+
+
 }
