@@ -1,4 +1,4 @@
-package game;
+package com.andrewlensen.kingsAndAces.game;
 
 
 import java.util.prefs.BackingStoreException;

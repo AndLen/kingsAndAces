@@ -1,6 +1,5 @@
-package game;
+package com.andrewlensen.kingsAndAces.game;
 
-import java.util.Collections;
 import java.util.List;
 
 /**

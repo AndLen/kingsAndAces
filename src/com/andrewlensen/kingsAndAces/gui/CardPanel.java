@@ -1,6 +1,9 @@
-package gui;
+package com.andrewlensen.kingsAndAces.gui;
 
-import game.*;
+import com.andrewlensen.kingsAndAces.game.*;
+import com.andrewlensen.kingsAndAces.game.moves.CardMove;
+import com.andrewlensen.kingsAndAces.game.moves.CardMoveImpl;
+import com.andrewlensen.kingsAndAces.game.moves.DeckClickMove;
 
 import javax.swing.*;
 import java.awt.*;
@@ -26,7 +29,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     private static double Y_BOARD_OFFSET;
     private static double X_BOARD_OFFSET;
     private static double DECK_Y;
-    private static String ERROR;
+    private static RenderMessage MESSAGE;
     private final CardGame game;
     private final Object lock = new Object();
     //Moving cards
@@ -98,16 +101,16 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     }
 
     private void renderError(Graphics2D g) {
-        if (ERROR != null) {
+        if (MESSAGE != null) {
             g.setFont(new Font("TimesRoman", Font.PLAIN, 30));
             FontMetrics fontMetrics = g.getFontMetrics();
             float xLeft = (float) (CARD_WIDTH + CARD_X_GAP);
 
-            float x = (getWidth() - xLeft - fontMetrics.stringWidth(ERROR)) / 2;
+            float x = (getWidth() - xLeft - fontMetrics.stringWidth(MESSAGE.getMessageText())) / 2;
             x += xLeft;
             float y = (float) (DECK_Y + CARD_HEIGHT / 2);
-            g.setColor(Color.RED);
-            g.drawString(ERROR, x, y);
+            g.setColor(MESSAGE.isError() ? Color.RED : Color.black);
+            g.drawString(MESSAGE.getMessageText(), x, y);
         }
     }
 
@@ -302,7 +305,12 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
             }
             LAST_PRESS = System.currentTimeMillis();
             if (clickedOnDeck(e)) {
-                if (game.hasDealt()) processDeckClick();
+                if (game.hasDealt()) {
+                    processDeckClick();
+                } else {
+                    //Can click on the deck to deal the next lot
+                    game.getDealLatch().countDown();
+                }
             } else if (clickedOnHand(e)) {
                 if (game.hasDealt()) processMoveFromHand(e);
             } else if (clickedOnKingPile(e)) {
@@ -374,6 +382,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
                 }
 
                 if (clickedOnDeck(e)) {
+                    System.out.println(game.canAddToDeckFromBoard());
                     if (game.canAddToDeckFromBoard()) {
                         processAddToDeck(e);
                     }
@@ -409,8 +418,11 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     }
 
     private void processAddToDeck(MouseEvent e) {
-        String result = game.addToDeck(activeMove);
-        processMoveResult(result, activeMove);
+        if (!game.hasDealt()) {
+            activeMove.cardReleased(0, CardMoveImpl.MOVE_TYPE_TO.TO_DECK);
+            processMoveResult(activeMove.makeMove(game, this), activeMove);
+            System.out.println("Add to Deck" + activeMove);
+        }
     }
 
     private void processMoveToHand(MouseEvent e) {
@@ -421,7 +433,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
 
             int indexTo = (int) ((e.getX() - handXStart()) / (handXGap + CARD_WIDTH));
             activeMove.cardReleased(indexTo, CardMoveImpl.MOVE_TYPE_TO.TO_HAND);
-            String result = activeMove.makeMove(game);
+            String result = activeMove.makeMove(game, this);
             processMoveResult(result, activeMove);
 
         }
@@ -431,7 +443,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
         if (index < 4) {
             activeMove.cardReleased(index, CardMoveImpl.MOVE_TYPE_TO.TO_ACE_PILES);
-            String result = activeMove.makeMove(game);
+            String result = activeMove.makeMove(game, this);
             processMoveResult(result, activeMove);
         }
     }
@@ -440,7 +452,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         int index = (int) (e.getY() / (CARD_Y_GAP + CARD_HEIGHT));
         if (index < 4) {
             activeMove.cardReleased(index, CardMoveImpl.MOVE_TYPE_TO.TO_KING_PILES);
-            String result = activeMove.makeMove(game);
+            String result = activeMove.makeMove(game, this);
             processMoveResult(result, activeMove);
         }
     }
@@ -451,7 +463,7 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         final Stack<Card> deck = game.getDeck();
         if (!deck.isEmpty()) {
             activeMove = new DeckClickMove();
-            String result = activeMove.makeMove(game);
+            String result = activeMove.makeMove(game, this);
             processMoveResult(result, activeMove);
         }
 
@@ -493,22 +505,22 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
         if (result.isEmpty()) {
             game.getHistory().push(move);
         } else if (!result.equals("ONTO_SELF")) {
-            storeError(result);
+            storeMessage(new RenderMessage(result, true));
         }
     }
 
-    public void storeError(final String error) {
+    public void storeMessage(final RenderMessage message) {
         //Render and disappear it
         new Thread() {
             public void run() {
-                ERROR = error;
+                MESSAGE = message;
                 try {
                     Thread.sleep(2000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                if (error.equals(ERROR)) {
-                    ERROR = null;
+                if (message.equals(MESSAGE)) {
+                    MESSAGE = null;
                     CardPanel.this.repaint();
                 }
             }
@@ -553,43 +565,6 @@ public class CardPanel extends JPanel implements ComponentListener, MouseListene
     }
 
     public void undo() {
-        if (game.getHistory().size() > 0) {
-            game.undo();
-
-        } else {
-            List<Card> pack = game.getPack();
-            if (game.canAddToDeckFromBoard()) {
-                //We don't want to do this halfway through a deal
-                if (pack != null) {
-                    Stack<Card> deck = game.getDeck();
-                    List<List<Card>> board = game.getBoard();
-
-                    if (deck.size() != 0 && deck.size() == board.get(0).size()) {
-                        pack.add(0, deck.pop());
-                    } else if (deck.size() == 8 && board.get(0).size() == 7) {
-                        //Special case where we deal 2 on the last one
-                        pack.add(0, deck.pop());
-                        pack.add(0, deck.pop());
-                        System.out.println("Special undo");
-                    }
-                    for (int i = board.size() - 1; i >= 0; i--) {
-                        List<Card> pile = board.get(i);
-                        if (pile.size() > 0) {
-                            pack.add(0, pile.remove(pile.size() - 1));
-                        }
-                    }
-                    if (game.hasDealt()) {
-                        new Thread() {
-                            public void run() {
-                                game.deal(CardPanel.this);
-
-                            }
-                        }.start();
-
-                    }
-                }
-
-            }
-        }
+        game.undo(this);
     }
 }

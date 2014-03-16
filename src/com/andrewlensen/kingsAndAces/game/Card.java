@@ -1,4 +1,4 @@
-package game;
+package com.andrewlensen.kingsAndAces.game;
 
 /**
  * Created by Andrew on 28/12/13.

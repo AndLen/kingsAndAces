@@ -1,7 +1,10 @@
-package game;
+package com.andrewlensen.kingsAndAces.game;
 
-import gui.CardFrame;
-import gui.CardPanel;
+import com.andrewlensen.kingsAndAces.game.moves.CardMove;
+import com.andrewlensen.kingsAndAces.game.moves.DealMove;
+import com.andrewlensen.kingsAndAces.gui.CardFrame;
+import com.andrewlensen.kingsAndAces.gui.CardPanel;
+import com.andrewlensen.kingsAndAces.gui.RenderMessage;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
@@ -31,6 +34,7 @@ public class CardGame {
 
     //Shouldn't be used generally. Bit of a hack
     private ArrayList<Card> pack = null;
+    private CountDownLatch dealLatch;
 
     public CardGame(CardFrame cardFrame) {
         this.cardFrame = cardFrame;
@@ -42,13 +46,17 @@ public class CardGame {
         acePiles = new CopyOnWriteArrayList<List<Card>>();
     }
 
-    private static void repaintWhileDealing(CardPanel panel) {
+    public static void repaintWhileDealing(CardPanel panel) {
         panel.repaint();
         try {
             Thread.sleep(50);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    public CountDownLatch getDealLatch() {
+        return dealLatch;
     }
 
     public void dealGame(CardPanel panel) {
@@ -103,50 +111,40 @@ public class CardGame {
 
     }
 
-    public void deal(CardPanel panel) {
+    public synchronized void deal(CardPanel panel) {
         hasDealt = false;
+        //canAddToDeckFromBoard = false;
+        //Let them initiate dealing
+        panel.storeMessage(new RenderMessage("Hit Enter/click the pack to start dealing", false));
         repaintWhileDealing(panel);
+
+        waitForNextDealConfirmation();
+
 
         //Deal to all 12 piles accounting for undos
         while (pack.size() > 13) {
-            String msg = pack.size() == 14 ? "Hit Enter to finish dealing" : "Hit Enter to continue dealing";
-            panel.storeError(msg);
-
-            repaintWhileDealing(panel);
-            waitForEnter();
-            for (int j = 0; j < 12; j++) {
-                //Want them all unrevealed
-                board.get(j).add(pack.remove(0));
-                repaintWhileDealing(panel);
-            }
-            //Get the user to check for adding to the deck
-            canAddToDeckFromBoard = true;
-
-            if (deck.size() == board.get(0).size() - 1) {
-                //Only add to the deck if they didn't undo.
-                deck.push(pack.remove(0));
-            }
-            repaintWhileDealing(panel);
+            DealMove dealMove = new DealMove();
+            dealMove.makeMove(this, panel);
+            history.push(dealMove);
 
         }
-        deck.push(pack.remove(0));
         repaintWhileDealing(panel);
         hasDealt = true;
     }
 
-    public void waitForEnter() {
-        final CountDownLatch latch = new CountDownLatch(1);
+    public synchronized void waitForNextDealConfirmation() {
+        dealLatch = new CountDownLatch(1);
         KeyEventDispatcher dispatcher = new KeyEventDispatcher() {
             // Anonymous class invoked from EDT
             public boolean dispatchKeyEvent(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER)
-                    latch.countDown();
+                    dealLatch.countDown();
                 return false;
             }
         };
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(dispatcher);
         try {
-            latch.await();  // current thread waits here until countDown() is called
+            dealLatch.await();  // current thread waits here until countDown() is called
         } catch (InterruptedException ignored) {
 
         }
@@ -205,11 +203,13 @@ public class CardGame {
         return history;
     }
 
-    public void undo() {
+    public void undo(CardPanel panel) {
         System.out.println(history);
         if (!history.isEmpty()) {
-            CardMove toUndo = history.pop();
-            toUndo.undo(this);
+            CardMove toUndo = history.peek();
+            if (toUndo.undo(this, panel)) {
+                history.pop();
+            }
         }
 
 
@@ -328,21 +328,15 @@ public class CardGame {
         return canAddToDeckFromBoard;
     }
 
-    public String addToDeck(CardMove activeMove) {
-        if (activeMove != null && activeMove instanceof CardMoveImpl) {
-            CardMoveImpl move = (CardMoveImpl) activeMove;
-            if (move.getMoveTypeFrom() == CardMoveImpl.MOVE_TYPE_FROM.FROM_BOARD) {
-                List<Card> cards = board.get(move.getIndexFrom());
-                Card topCard = cards.get(cards.size() - 1);
-                if (topCard.getRank().ordinal() == move.getIndexFrom()) {
-                    deck.push(cards.remove(cards.size() - 1));
-                    return "";
-                } else {
-                    return "Cannot add that to the deck, wrong rank";
-                }
-            }
+    public String addToDeck(int indexFrom) {
+        List<Card> cards = board.get(indexFrom);
+        Card topCard = cards.get(cards.size() - 1);
+        if (topCard.getRank().ordinal() == indexFrom) {
+            deck.push(cards.remove(cards.size() - 1));
+            return "";
+        } else {
+            return "Cannot add that to the deck, wrong rank";
         }
-        return "Cannot move that to the deck.";
     }
 
     public boolean hasDealt() {
@@ -354,4 +348,7 @@ public class CardGame {
     }
 
 
+    public void setCanAddToDeckFromBoard(boolean canAddToDeckFromBoard) {
+        this.canAddToDeckFromBoard = canAddToDeckFromBoard;
+    }
 }

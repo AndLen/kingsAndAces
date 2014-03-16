@@ -1,9 +1,9 @@
-package gui;
+package com.andrewlensen.kingsAndAces.gui;
 
 import com.kitfox.svg.SVGDiagram;
 import com.kitfox.svg.SVGException;
 import com.kitfox.svg.SVGUniverse;
-import game.Card;
+import com.andrewlensen.kingsAndAces.game.Card;
 
 import java.awt.*;
 import java.net.URISyntaxException;
@@ -17,7 +17,7 @@ public class ImageManager {
     private static final URL[] clubURLs = new URL[13];
     private static final URL[] diamondURLs = new URL[13];
     private static final URL[] heartURLs = new URL[13];
-    private static final String urlBase = "/images/";
+    private static final String urlBase = "/com/andrewlensen/kingsAndAces/images/";
     private static final SVGUniverse universe = new SVGUniverse();
 
     static {

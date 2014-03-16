@@ -1,6 +1,10 @@
-package game;
+package com.andrewlensen.kingsAndAces.game.moves;
 
 
+import com.andrewlensen.kingsAndAces.game.Card;
+import com.andrewlensen.kingsAndAces.game.CardGame;
+import com.andrewlensen.kingsAndAces.game.Hand;
+import com.andrewlensen.kingsAndAces.gui.CardPanel;
 import com.sun.istack.internal.Nullable;
 
 import java.util.List;
@@ -10,7 +14,7 @@ public class DeckClickMove implements CardMove {
     private Hand prevHand;
 
     @Override
-    public String makeMove(CardGame game) {
+    public String makeMove(CardGame game, CardPanel panel) {
         Hand hand = game.getHand();
         List<List<Card>> board = game.getBoard();
         Card fromDeck = game.getDeck().pop();
@@ -30,8 +34,7 @@ public class DeckClickMove implements CardMove {
     }
 
     @Override
-    public void undo(CardGame game) {
-        //TODO
+    public boolean undo(CardGame game, CardPanel panel) {
         Hand hand = game.getHand();
         List<List<Card>> board = game.getBoard();
         List<Card> fromHandList = hand.getList();
@@ -49,10 +52,15 @@ public class DeckClickMove implements CardMove {
         if (prevHand != null) {
             board.set(prevHand.getIndex(), new CopyOnWriteArrayList<Card>());
         }
+        return true;
     }
 
     @Override
     public void cardReleased(int indexTo, @Nullable MOVE_TYPE_TO toHand) {
 
+    }
+
+    public String toString() {
+        return "Prev hand: " + prevHand + " TYPE: " + this.getClass().getSimpleName();
     }
 }

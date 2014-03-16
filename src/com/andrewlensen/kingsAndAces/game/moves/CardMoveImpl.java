@@ -1,4 +1,8 @@
-package game;
+package com.andrewlensen.kingsAndAces.game.moves;
+
+import com.andrewlensen.kingsAndAces.game.Card;
+import com.andrewlensen.kingsAndAces.game.CardGame;
+import com.andrewlensen.kingsAndAces.gui.CardPanel;
 
 import java.util.List;
 
@@ -19,7 +23,7 @@ public class CardMoveImpl implements CardMove {
         this.moveTypeTo = move_type_to;
     }
 
-    public String makeMove(CardGame game) {
+    public String makeMove(CardGame game, CardPanel panel) {
         if (indexTo != -1) {
 
             switch (moveTypeFrom) {
@@ -49,6 +53,8 @@ public class CardMoveImpl implements CardMove {
 
             case TO_HAND:
                 return game.makeHandMove(indexFrom, indexTo);
+
+
         }
         return "ERROR";
 
@@ -64,6 +70,9 @@ public class CardMoveImpl implements CardMove {
 
             case TO_HAND:
                 return "Cannot move to hand.";
+
+            case TO_DECK:
+                return game.addToDeck(indexFrom);
         }
         return "ERROR";
     }
@@ -106,14 +115,14 @@ public class CardMoveImpl implements CardMove {
 
 
     public String toString() {
-        return "FROM:" + indexFrom + (indexTo == -1 ? "" : " TO " + indexTo);
+        return "FROM:" + indexFrom + (indexTo == -1 ? "" : " TO " + indexTo) + " TYPE FROM: " + moveTypeFrom + " TYPE TO: " + moveTypeTo;
     }
 
     public MOVE_TYPE_FROM getMoveTypeFrom() {
         return moveTypeFrom;
     }
 
-    public void undo(CardGame game) {
+    public boolean undo(CardGame game, CardPanel panel) {
         if (moveTypeFrom == MOVE_TYPE_FROM.FROM_HAND) {
 
             switch (moveTypeTo) {
@@ -129,12 +138,12 @@ public class CardMoveImpl implements CardMove {
                 case TO_HAND:
                     List<Card> hand = game.getHand().getList();
                     hand.add(indexFrom, hand.remove(indexTo));
-                    return;
+                    return true;
             }
 
         } else {
             List<Card> to = null;
-            List<Card> from = moveTypeTo == MOVE_TYPE_TO.TO_ACE_PILES ? game.getAcePiles().get(indexTo) : game.getKingPiles().get(indexTo);
+            List<Card> from = null;
             switch (moveTypeFrom) {
                 case FROM_ACE_PILES:
                     to = game.getAcePiles().get(indexFrom);
@@ -145,11 +154,25 @@ public class CardMoveImpl implements CardMove {
                 case FROM_BOARD:
                     to = game.getBoard().get(indexFrom);
                     break;
+            }
+            switch (moveTypeTo) {
 
+                case TO_ACE_PILES:
+                    from = game.getAcePiles().get(indexTo);
+                    break;
+                case TO_KING_PILES:
+                    from = game.getKingPiles().get(indexTo);
+                    break;
+
+                case TO_DECK:
+                    from = game.getDeck();
+                    break;
             }
             assert to != null;
+            assert from != null;
             to.add(from.remove(from.size() - 1));
         }
+        return true;
     }
 
 

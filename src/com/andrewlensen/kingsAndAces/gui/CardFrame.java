@@ -1,7 +1,7 @@
-package gui;
+package com.andrewlensen.kingsAndAces.gui;
 
-import game.CardGame;
-import game.StorageManager;
+import com.andrewlensen.kingsAndAces.game.CardGame;
+import com.andrewlensen.kingsAndAces.game.StorageManager;
 
 import javax.swing.*;
 import java.awt.*;
