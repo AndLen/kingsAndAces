@@ -34,13 +34,13 @@ public class DealMove implements CardMove {
         CardGame.repaintWhileDealing(panel);
         game.waitForNextDealConfirmation();
 
-        if (deck.size() == board.get(0).size() - 1) {
-            //Only add to the deck if they didn't undo.
+        //  if (deck.size() == board.get(0).size() - 1) {
+        //Only add to the deck if they didn't undo.
+        deck.push(pack.remove(0));
+        if (pack.size() == 1) {
             deck.push(pack.remove(0));
-            if (pack.size() == 1) {
-                deck.push(pack.remove(0));
-            }
         }
+        //  }
         System.out.println("DECK ADDED: " + deck);
         CardGame.repaintWhileDealing(panel);
         System.out.println("PACK:" + pack);
@@ -57,12 +57,15 @@ public class DealMove implements CardMove {
             if (pack != null) {
                 Stack<Card> deck = game.getDeck();
                 List<List<Card>> board = game.getBoard();
-                if (deck.size() == 8 && board.get(0).size() == 7) {
+                System.out.println("Pack size:" + pack.size());
+                //        if (deck.size() == 8 && board.get(0).size() == 7) {
+                if (pack.size() == 0) {
                     //Special case where we deal 2 on the last one
                     pack.add(0, deck.pop());
                     pack.add(0, deck.pop());
                     System.out.println("Special undo");
-                } else if (deck.size() != 0 && deck.size() == board.get(0).size()) {
+                }// else if (deck.size() != 0 && deck.size() == board.get(0).size()) {
+                else {
                     pack.add(0, deck.pop());
                 }
                 for (int i = 11; i >= 0; i--) {

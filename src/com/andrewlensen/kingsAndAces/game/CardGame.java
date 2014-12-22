@@ -123,11 +123,13 @@ public class CardGame {
 
         //Deal to all 12 piles accounting for undos
         while (pack.size() > 13) {
+            System.out.println(pack.size());
             DealMove dealMove = new DealMove();
             dealMove.makeMove(this, panel);
             history.push(dealMove);
 
         }
+        System.out.println(pack.size());
         repaintWhileDealing(panel);
         hasDealt = true;
     }
